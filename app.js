@@ -1,10 +1,12 @@
 const defaultMasterTasks = [
-  { id: 1, name: '洗顔・歯磨き', duration: 10, selected: true },
-  { id: 2, name: '朝食', duration: 20, selected: true },
-  { id: 3, name: '着替え・身支度', duration: 15, selected: true },
-  { id: 4, name: 'メイク / ひげそり', duration: 15, selected: false },
-  { id: 5, name: 'ゴミ出し', duration: 5, selected: false },
-  { id: 6, name: '持ち物チェック', duration: 5, selected: true }
+  { id: 1, name: '朝食', duration: 30, selected: true },
+  { id: 2, name: 'お弁当', duration: 60, selected: true },
+  { id: 3, name: '歯磨き', duration: 15, selected: true },
+  { id: 4, name: “シャワー”, duration: 20, selected:  true },
+  { id: 5, name: '化粧', duration: 25, selected: true },
+  { id: 6, name: 'ヘアセット', duration: 5, selected: true },
+  { id: 7, name: '着替え', duration: 7, selected: true },
+  { id: 8, name: '洗濯', duration: 8, selected: true }
 ];
 
 let masterTasks = JSON.parse(localStorage.getItem('morning_master_tasks')) || defaultMasterTasks;
