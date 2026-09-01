@@ -292,4 +292,3 @@ function formatTime(date) {
   return `${h}:${m}`;
 }
 
-
