@@ -1,4 +1,4 @@
-// デフォルトのマスタータスク（ご指定の内容に更新）
+// ご提示いただいた通りの並び順（上から下へこの順番で表示・計算されます）
 const defaultMasterTasks = [
   { id: 1, name: '朝ごはん', duration: 30, selected: true },
   { id: 2, name: 'お弁当', duration: 60, selected: true },
@@ -36,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
+// 設定セクションの描画（配列の並び順通りに表示）
 function renderTaskInputs() {
   const container = document.getElementById('task-inputs');
   container.innerHTML = '';
@@ -82,9 +83,10 @@ function saveTaskInputs() {
   localStorage.setItem('morning_master_tasks', JSON.stringify(masterTasks));
 }
 
-// 時間計算＆自動傾斜配分ロジック（未完了タスク全体の再計算対応）
+// 時間計算＆実行用リストの描画（配列の定義順を100%維持）
 function calculateSchedule() {
   const depTimeStr = document.getElementById('departure-time').value;
+  // 配列の並び順のまま選択されているタスクを抽出
   const selectedTasks = masterTasks.filter(t => t.selected && t.name.trim() !== '');
 
   if (!depTimeStr || selectedTasks.length === 0) {
@@ -103,10 +105,8 @@ function calculateSchedule() {
   
   document.getElementById('calc-start-time').textContent = formatTime(initialStartDate);
 
-  // 2. 現在の「最新の完了完了時刻」または「初期開始時刻」を取得（全体の進行基準点）
+  // 2. 最新の完了完了時刻を取得
   let latestCompletedTime = new Date(initialStartDate.getTime());
-  
-  // 完了済みの全タスクの中で、一番最後に完了チェックされた時間を探す
   selectedTasks.forEach(task => {
     const state = taskStates[task.id];
     if (state && state.done && state.completedAt) {
@@ -117,14 +117,12 @@ function calculateSchedule() {
     }
   });
 
-  // 3. 上下に散らばっている「未完了タスク」の合計所要時間を集計
+  // 3. 未完了タスクの合計時間を集計
   const uncompletedTasks = selectedTasks.filter(t => !taskStates[t.id] || !taskStates[t.id].done);
   const remainingTotalOriginalMinutes = uncompletedTasks.reduce((sum, t) => sum + t.duration, 0);
-
-  // 残り利用可能な時間（分）
   const availableMinutes = (depDate - latestCompletedTime) / 60000;
 
-  // 4. スケジュール描画
+  // 4. スケジュール描画（設定した配列順のまま表示）
   const listEl = document.getElementById('task-list');
   listEl.innerHTML = '';
 
@@ -137,7 +135,7 @@ function calculateSchedule() {
     li.className = `task-item ${state.done ? 'completed' : ''}`;
 
     if (state.done && state.completedAt) {
-      // --- 【完了済みタスクの表示】 ---
+      // 完了済みタスク
       const actualDate = new Date(state.completedAt);
       const scheduledEnd = new Date(currentStartTime.getTime() + task.duration * 60000);
       const isDelayed = actualDate > scheduledEnd;
@@ -159,14 +157,13 @@ function calculateSchedule() {
       currentStartTime = scheduledEnd;
 
     } else {
-      // --- 【未完了タスクの表示（再計算）】 ---
+      // 未完了タスク（配列順を保ったまま残り時間を配分）
       let allocatedDuration = task.duration;
 
-      // 残り時間が押している（かつ未完了タスクが存在する）場合は時間比率で割り振る
       if (availableMinutes > 0 && remainingTotalOriginalMinutes > 0 && availableMinutes < remainingTotalOriginalMinutes) {
         allocatedDuration = (task.duration / remainingTotalOriginalMinutes) * availableMinutes;
       } else if (availableMinutes <= 0) {
-        allocatedDuration = 1; // 時間切れの場合は最小1分表記
+        allocatedDuration = 1;
       }
 
       const scheduledEnd = new Date(runningUncompletedStart.getTime() + allocatedDuration * 60000);
@@ -179,7 +176,6 @@ function calculateSchedule() {
         </div>
       `;
 
-      // 次の未完了タスクのための開始時間を進める
       runningUncompletedStart = scheduledEnd;
       currentStartTime = new Date(currentStartTime.getTime() + task.duration * 60000);
     }
