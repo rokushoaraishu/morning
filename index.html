@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>朝の準備ナビ</title>
+  <title>朝の準備</title>
   
-  <!-- PWA関連設定 -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#4A90E2">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -17,18 +16,17 @@
 </head>
 <body>
   <div class="container">
-    <h1>タスクと時間の計算</h1>
+    <h1>朝の準備</h1>
 
-    <!-- 設定セクション -->
     <section class="card">
       <h2>1. 今日の準備設定</h2>
       <div class="input-group">
         <label for="departure-time">目標出発時刻:</label>
-        <input type="time" id="departure-time" value="10:30">
+        <input type="time" id="departure-time" value="08:00">
       </div>
       
-      <h3>今日やるタスクの選択 & 編集</h3>
-      <p class="sub-text">※今日実行するタスクにチェックを入れてください</p>
+      <h3>タスク選択・順番入れ替え</h3>
+      <p class="sub-text">※▲▼で順番を変更し、今日やるタスクにチェックを入れてください</p>
       <div id="task-inputs"></div>
       
       <div class="button-group">
@@ -37,7 +35,6 @@
       </div>
     </section>
 
-    <!-- スケジュール・実行セクション -->
     <section class="card" id="schedule-section">
       <h2>2. 今日の実行リスト</h2>
       <div id="start-time-display" class="highlight-box">
