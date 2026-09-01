@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>朝の準備ナビ</title>
+  
+  <!-- PWA関連設定 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4A90E2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="朝支度">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🌅 朝の準備ナビ</h1>
+
+    <!-- 設定セクション -->
+    <section class="card">
+      <h2>1. 今日の準備設定</h2>
+      <div class="input-group">
+        <label for="departure-time">目標出発時刻:</label>
+        <input type="time" id="departure-time" value="08:00">
+      </div>
+      
+      <h3>今日やるタスクの選択 & 編集</h3>
+      <p class="sub-text">※今日実行するタスクにチェックを入れてください</p>
+      <div id="task-inputs"></div>
+      
+      <div class="button-group">
+        <button id="add-task-btn" class="btn btn-secondary">+ タスクを追加</button>
+        <button id="calculate-btn" class="btn btn-primary">今日のスケジュール作成</button>
+      </div>
+    </section>
+
+    <!-- スケジュール・実行セクション -->
+    <section class="card" id="schedule-section">
+      <h2>2. 今日の実行リスト</h2>
+      <div id="start-time-display" class="highlight-box">
+        準備開始予定時刻: <span id="calc-start-time">--:--</span>
+      </div>
+      
+      <ul id="task-list" class="task-list"></ul>
+      
+      <button id="reset-btn" class="btn btn-outline">進捗をリセット</button>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(err => console.error(err));
+      });
+    }
+  </script>
+</body>
+</html>

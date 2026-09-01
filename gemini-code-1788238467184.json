@@ -1,0 +1,15 @@
+{
+  "name": "朝の準備ナビ",
+  "short_name": "朝支度",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F4F7F6",
+  "theme_color": "#4A90E2",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

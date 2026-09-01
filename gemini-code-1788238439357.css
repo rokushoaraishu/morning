@@ -1,0 +1,93 @@
+:root {
+  --primary: #4A90E2;
+  --bg: #F4F7F6;
+  --card-bg: #FFFFFF;
+  --text: #333333;
+  --success: #2ECC71;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 15px;
+}
+
+.container { max-width: 500px; margin: 0 auto; }
+h1 { text-align: center; font-size: 1.5rem; color: var(--primary); margin-bottom: 20px; }
+h2 { font-size: 1.2rem; margin-top: 0; border-bottom: 2px solid var(--primary); padding-bottom: 5px; }
+.sub-text { font-size: 0.8rem; color: #666; margin-top: -5px; }
+
+.card {
+  background: var(--card-bg);
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 20px;
+}
+
+.input-group { margin-bottom: 15px; }
+label { display: block; font-weight: bold; margin-bottom: 5px; }
+input[type="time"], input[type="text"], input[type="number"] {
+  padding: 8px;
+  border: 1px solid #CCC;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.task-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  background: #FAFAFA;
+  padding: 8px;
+  border-radius: 6px;
+}
+
+.task-input-row input[type="text"] { flex: 2; }
+.task-input-row input[type="number"] { width: 60px; }
+
+.btn {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 5px;
+}
+
+.button-group { display: flex; gap: 10px; margin-top: 10px; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-secondary { background: #E0E0E0; color: #333; }
+.btn-outline { background: transparent; border: 1px solid #999; color: #666; margin-top: 15px; }
+.btn-del { background: #FF4D4D; color: white; border: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+
+.highlight-box {
+  background: #EBF5FB;
+  padding: 12px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+}
+
+.task-list { list-style: none; padding: 0; margin: 0; }
+.task-item {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-bottom: 1px solid #EEE;
+  gap: 12px;
+}
+
+.task-item.completed { background-color: #F0F9F4; opacity: 0.7; }
+.task-checkbox { width: 24px; height: 24px; }
+.task-info { flex: 1; }
+.task-name { font-weight: bold; }
+.task-time { font-size: 0.85rem; color: #666; }
+.actual-time { font-size: 0.8rem; color: var(--success); font-weight: bold; }
