@@ -3,7 +3,7 @@ const defaultMasterTasks = [
   { id: 2, name: 'お弁当', duration: 60, selected: true },
   { id: 3, name: '歯磨き', duration: 15, selected: true },
   { id: 4, name: 'シャワー', duration: 20, selected:  true },
-  { id: 5, name: '化粧', duration: 25, selected: true },
+ { id: 5, name: '化粧', duration: 25, selected: true },
   { id: 6, name: 'ヘアセット', duration: 5, selected: true },
   { id: 7, name: '着替え', duration: 7, selected: true },
   { id: 8, name: '洗濯', duration: 8, selected: true }
@@ -15,6 +15,9 @@ let taskStates = JSON.parse(localStorage.getItem('morning_states')) || {};
 document.addEventListener('DOMContentLoaded', () => {
   renderTaskInputs();
   calculateSchedule();
+
+  // 1分ごとに画面を更新して、未完了タスクの遅延（赤字化）をリアルタイム判定
+  setInterval(calculateSchedule, 60000);
 
   document.getElementById('add-task-btn').addEventListener('click', () => {
     saveTaskInputs();
@@ -106,11 +109,12 @@ function calculateSchedule() {
     return;
   }
 
+  const now = new Date();
   const today = new Date();
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
-  // 全タスクの合計所要時間から、最初の開始時刻を計算
+  // 初期予定の算出（基準値）
   let totalMinutes = selectedTasks.reduce((sum, t) => sum + t.duration, 0);
   let initialStartDate = new Date(depDate.getTime() - totalMinutes * 60000);
   
@@ -124,47 +128,78 @@ function calculateSchedule() {
   selectedTasks.forEach((task) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
     
-    // 終了予定時刻（1つの時刻）を計算
+    // このタスクの目標完了時刻
     let targetEndTime = new Date(currentStartTime.getTime() + task.duration * 60000);
-
+    
     const li = document.createElement('li');
     li.className = `task-item ${state.done ? 'completed' : ''}`;
 
-    let actualTimeString = '';
+    let timeDisplayHtml = '';
+    
     if (state.done && state.completedAt) {
+      // --- 【完了済みタスクの表示処理】 ---
       const actualDate = new Date(state.completedAt);
-      actualTimeString = `(完了記録: ${formatTime(actualDate)})`;
+      // 当初の目標より遅れて完了した場合は赤文字
+      const isDelayed = actualDate > targetEndTime;
+      const colorStyle = isDelayed ? 'color: #E74C3C; font-weight: bold;' : 'color: #2ECC71; font-weight: bold;';
       
-      // 遅延・前倒しが発生した場合、実際の完了時刻をベースに次のタスクの起点を上書き
+      timeDisplayHtml = `
+        <div class="task-time">完了目標: ${formatTime(targetEndTime)} まで</div>
+        <div style="${colorStyle} font-size: 0.85rem;">(完了記録: ${formatTime(actualDate)}${isDelayed ? ' ⚠️遅延' : ''})</div>
+      `;
+      
+      // 次のタスクへの引き継ぎ時刻を「実際の完了時刻」に更新
       currentStartTime = actualDate;
-      targetEndTime = new Date(currentStartTime.getTime() + task.duration * 60000);
+    } else {
+      // --- 【未完了タスクの表示処理】 ---
+      // 現在時刻がすでに目標時間を過ぎている場合は赤文字で警告！
+      const isOverdue = now > targetEndTime;
+      const timeStyle = isOverdue ? 'color: #E74C3C; font-weight: bold;' : 'color: #666;';
+      
+      timeDisplayHtml = `
+        <div class="task-time" style="${timeStyle}">
+          完了目標: <strong>${formatTime(targetEndTime)}</strong> まで ${isOverdue ? '⚠️遅延中' : ''}
+        </div>
+      `;
+      
+      // 未完了タスクの目標終了時間を次のタスクの開始基準にする
+      currentStartTime = targetEndTime;
     }
 
     li.innerHTML = `
       <input type="checkbox" class="task-checkbox" ${state.done ? 'checked' : ''} onchange="toggleTask(${task.id})">
       <div class="task-info">
         <div class="task-name">${task.name} (${task.duration}分)</div>
-        <div class="task-time">完了目標: <strong>${formatTime(targetEndTime)}</strong> まで</div>
-        ${actualTimeString ? `<div class="actual-time">${actualTimeString}</div>` : ''}
+        ${timeDisplayHtml}
       </div>
     `;
 
     listEl.appendChild(li);
-
-    // 未完了タスクの場合、次のタスクの開始基準時刻は「このタスクの目標終了時刻」になる
-    if (!state.done) {
-      currentStartTime = targetEndTime;
-    }
   });
 }
 
+// チェックボックスを押した時の連動処理
 function toggleTask(taskId) {
-  if (!taskStates[taskId]) {
-    taskStates[taskId] = { done: false, completedAt: null };
+  const selectedTasks = masterTasks.filter(t => t.selected && t.name !== '');
+  const targetIndex = selectedTasks.findIndex(t => t.id === taskId);
+  const nowIso = new Date().toISOString();
+
+  if (targetIndex !== -1) {
+    const isCurrentlyDone = taskStates[taskId]?.done;
+
+    if (!isCurrentlyDone) {
+      // チェックを入れた場合：選択したタスク「およびそれより上の未完了タスク」を全て完了扱いにする
+      for (let i = 0; i <= targetIndex; i++) {
+        const id = selectedTasks[i].id;
+        if (!taskStates[id] || !taskStates[id].done) {
+          taskStates[id] = { done: true, completedAt: nowIso };
+        }
+      }
+    } else {
+      // チェックを外した場合：対象のタスクの完了状態を解除
+      taskStates[taskId] = { done: false, completedAt: null };
+    }
   }
-  
-  taskStates[taskId].done = !taskStates[taskId].done;
-  taskStates[taskId].completedAt = taskStates[taskId].done ? new Date().toISOString() : null;
 
   localStorage.setItem('morning_states', JSON.stringify(taskStates));
   calculateSchedule();
@@ -175,3 +210,4 @@ function formatTime(date) {
   const m = String(date.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
 }
+
