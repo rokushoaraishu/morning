@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>朝の準備</title>
+  <title>朝の準備ナビ</title>
   
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#4A90E2">
@@ -16,7 +16,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>朝の準備</h1>
+    <h1>🌅 朝の準備ナビ</h1>
 
     <section class="card">
       <h2>1. 今日の準備設定</h2>
@@ -29,9 +29,11 @@
       <p class="sub-text">※▲▼で順番を変更し、今日やるタスクにチェックを入れてください</p>
       <div id="task-inputs"></div>
       
-      <div class="button-group">
-        <button id="add-task-btn" class="btn btn-secondary">+ タスクを追加</button>
-        <button id="calculate-btn" class="btn btn-primary">今日のスケジュール作成</button>
+      <div class="button-group" style="flex-wrap: wrap;">
+        <button id="add-task-btn" class="btn btn-secondary">+ タスク追加</button>
+        <button id="clear-all-btn" class="btn btn-outline" style="margin-top:5px; border-color:#FF4D4D; color:#FF4D4D;">一括削除</button>
+        <button id="reset-default-btn" class="btn btn-outline" style="margin-top:5px;">デフォルトに戻す</button>
+        <button id="calculate-btn" class="btn btn-primary" style="width:100%; margin-top:8px;">今日のスケジュール作成</button>
       </div>
     </section>
 
@@ -41,7 +43,7 @@
         準備開始予定時刻: <span id="calc-start-time">--:--</span>
       </div>
       
-      <ul id="task-list" class="task-list"></ul>
+      <div id="task-list" class="task-list"></div>
       
       <button id="reset-btn" class="btn btn-outline">進捗をリセット</button>
     </section>
