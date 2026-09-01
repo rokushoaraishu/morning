@@ -15,10 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTaskInputs();
   calculateSchedule();
 
-  // タスク追加ボタン
+  // タスク追加ボタン：【修正】追加する前に入力内容を一時保存する
   document.getElementById('add-task-btn').addEventListener('click', () => {
+    saveTaskInputs(); // 今画面に入力されている内容を保存
     masterTasks.push({ id: Date.now(), name: '', duration: 10, selected: true });
-    renderTaskInputs();
+    renderTaskInputs(); // その後に再描画
   });
 
   // スケジュール更新ボタン
@@ -37,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// 設定セクションの描画（選択用チェックボックス付き）
+// 設定セクションの描画（入力内容が消えないようイベントリスナーも追加）
 function renderTaskInputs() {
   const container = document.getElementById('task-inputs');
   container.innerHTML = '';
@@ -47,46 +48,55 @@ function renderTaskInputs() {
     row.className = 'task-input-row';
     row.innerHTML = `
       <input type="checkbox" class="input-select" ${task.selected ? 'checked' : ''} data-index="${index}">
-      <input type="text" value="${task.name}" placeholder="タスク名" class="input-name" data-index="${index}">
+      <input type="text" value="${escapeHtml(task.name)}" placeholder="タスク名" class="input-name" data-index="${index}">
       <input type="number" value="${task.duration}" placeholder="分" class="input-duration" data-index="${index}">分
       <button class="btn-del" onclick="removeTask(${index})">✕</button>
     `;
     container.appendChild(row);
   });
+
+  // 文字を入力したりチェックを変えた瞬間にリアルタイムでデータを保持する処理
+  const inputs = container.querySelectorAll('input');
+  inputs.forEach(input => {
+    input.addEventListener('input', saveTaskInputs);
+    input.addEventListener('change', saveTaskInputs);
+  });
 }
 
 function removeTask(index) {
+  saveTaskInputs(); // 削除する前にも現在の入力を保持
   masterTasks.splice(index, 1);
   renderTaskInputs();
+  calculateSchedule();
 }
 
-// フォームの入力をデータに保存
+// 画面に入力されている内容をデータ（masterTasks）に保存する処理
 function saveTaskInputs() {
   const selects = document.querySelectorAll('.input-select');
   const names = document.querySelectorAll('.input-name');
   const durations = document.querySelectorAll('.input-duration');
 
-  masterTasks = [];
   names.forEach((el, i) => {
-    const name = el.value.trim();
-    const duration = parseInt(durations[i].value) || 0;
-    const selected = selects[i].checked;
-    if (name) {
-      masterTasks.push({ id: Date.now() + i, name, duration, selected });
+    if (masterTasks[i]) {
+      masterTasks[i].name = el.value;
+      masterTasks[i].duration = parseInt(durations[i].value) || 0;
+      masterTasks[i].selected = selects[i].checked;
     }
   });
+
+  // ブラウザの文字記憶領域に保存
   localStorage.setItem('morning_master_tasks', JSON.stringify(masterTasks));
 }
 
 // 時間計算＆実行用リストの描画
 function calculateSchedule() {
   const depTimeStr = document.getElementById('departure-time').value;
-  // 今日選択されているタスクだけを抽出
-  const selectedTasks = masterTasks.filter(t => t.selected);
+  // 今日選択されているタスク（かつ名前が空でないもの）だけを抽出
+  const selectedTasks = masterTasks.filter(t => t.selected && t.name.trim() !== '');
 
   if (!depTimeStr || selectedTasks.length === 0) {
     document.getElementById('calc-start-time').textContent = '--:--';
-    document.getElementById('task-list').innerHTML = '<li style="padding:15px; text-align:center; color:#888;">タスクが選択されていません</li>';
+    document.getElementById('task-list').innerHTML = '<li style="padding:15px; text-align:center; color:#888;">タスクが選択されていないか、名前が空です</li>';
     return;
   }
 
@@ -106,7 +116,7 @@ function calculateSchedule() {
 
   let currentStartTime = new Date(initialStartDate.getTime());
 
-  selectedTasks.forEach((task, index) => {
+  selectedTasks.forEach((task) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
     let scheduledEnd = new Date(currentStartTime.getTime() + task.duration * 60000);
 
@@ -125,7 +135,7 @@ function calculateSchedule() {
     li.innerHTML = `
       <input type="checkbox" class="task-checkbox" ${state.done ? 'checked' : ''} onchange="toggleTask(${task.id})">
       <div class="task-info">
-        <div class="task-name">${task.name} (${task.duration}分)</div>
+        <div class="task-name">${escapeHtml(task.name)} (${task.duration}分)</div>
         <div class="task-time">予定: ${formatTime(currentStartTime)} ～ ${formatTime(scheduledEnd)}</div>
         ${actualTimeString ? `<div class="actual-time">${actualTimeString}</div>` : ''}
       </div>
@@ -155,4 +165,10 @@ function formatTime(date) {
   const h = String(date.getHours()).padStart(2, '0');
   const m = String(date.getMinutes()).padStart(2, '0');
   return `${h}:${m}`;
+}
+
+// 特殊文字対策（入力されたテキストの安全な表示用）
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
