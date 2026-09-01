@@ -1,4 +1,4 @@
-// デフォルトのマスタータスク
+// デフォルトのマスタータスク（ご指定の内容に更新）
 const defaultMasterTasks = [
   { id: 1, name: '朝ごはん', duration: 30, selected: true },
   { id: 2, name: 'お弁当', duration: 60, selected: true },
@@ -82,7 +82,7 @@ function saveTaskInputs() {
   localStorage.setItem('morning_master_tasks', JSON.stringify(masterTasks));
 }
 
-// 時間計算＆自動傾斜配分ロジック
+// 時間計算＆自動傾斜配分ロジック（未完了タスク全体の再計算対応）
 function calculateSchedule() {
   const depTimeStr = document.getElementById('departure-time').value;
   const selectedTasks = masterTasks.filter(t => t.selected && t.name.trim() !== '');
@@ -97,79 +97,94 @@ function calculateSchedule() {
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
-  // 初期の理想開始時刻を計算
+  // 1. 初期の理想開始時刻を計算
   let totalMinutes = selectedTasks.reduce((sum, t) => sum + t.duration, 0);
   let initialStartDate = new Date(depDate.getTime() - totalMinutes * 60000);
   
   document.getElementById('calc-start-time').textContent = formatTime(initialStartDate);
 
+  // 2. 現在の「最新の完了完了時刻」または「初期開始時刻」を取得（全体の進行基準点）
+  let latestCompletedTime = new Date(initialStartDate.getTime());
+  
+  // 完了済みの全タスクの中で、一番最後に完了チェックされた時間を探す
+  selectedTasks.forEach(task => {
+    const state = taskStates[task.id];
+    if (state && state.done && state.completedAt) {
+      const completedDate = new Date(state.completedAt);
+      if (completedDate > latestCompletedTime) {
+        latestCompletedTime = completedDate;
+      }
+    }
+  });
+
+  // 3. 上下に散らばっている「未完了タスク」の合計所要時間を集計
+  const uncompletedTasks = selectedTasks.filter(t => !taskStates[t.id] || !taskStates[t.id].done);
+  const remainingTotalOriginalMinutes = uncompletedTasks.reduce((sum, t) => sum + t.duration, 0);
+
+  // 残り利用可能な時間（分）
+  const availableMinutes = (depDate - latestCompletedTime) / 60000;
+
+  // 4. スケジュール描画
   const listEl = document.getElementById('task-list');
   listEl.innerHTML = '';
 
   let currentStartTime = new Date(initialStartDate.getTime());
+  let runningUncompletedStart = new Date(latestCompletedTime.getTime());
 
-  selectedTasks.forEach((task, index) => {
+  selectedTasks.forEach((task) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
-    
-    // 当初の予定終了時刻
-    let scheduledEnd = new Date(currentStartTime.getTime() + task.duration * 60000);
-    let isDelayed = false;
-    let delayMinutes = 0;
-    let actualTimeString = '';
-
-    if (state.done && state.completedAt) {
-      const actualDate = new Date(state.completedAt);
-      
-      // 遅延判定（完了時刻が予定終了時刻を超えているか）
-      if (actualDate > scheduledEnd) {
-        isDelayed = true;
-        delayMinutes = Math.round((actualDate - scheduledEnd) / 60000);
-      }
-
-      const timeColorStyle = isDelayed ? 'color: #E74C3C;' : 'color: #2ECC71;';
-      const delayBadge = isDelayed ? ` <span style="color:#E74C3C; font-weight:bold;">[遅れ ${delayMinutes}分]</span>` : '';
-      
-      actualTimeString = `<div class="actual-time" style="${timeColorStyle} font-weight:bold;">完了: ${formatTime(actualDate)}${delayBadge}</div>`;
-
-      // 次のタスクのための基準時間を完了実効時刻にする
-      currentStartTime = actualDate;
-    }
-
     const li = document.createElement('li');
     li.className = `task-item ${state.done ? 'completed' : ''}`;
 
-    li.innerHTML = `
-      <input type="checkbox" class="task-checkbox" ${state.done ? 'checked' : ''} onchange="toggleTask(${task.id})">
-      <div class="task-info">
-        <div class="task-name">${escapeHtml(task.name)} (${task.duration}分)</div>
-        <div class="task-time">予定: ${formatTime(currentStartTime)} ～ ${formatTime(scheduledEnd)}</div>
-        ${actualTimeString}
-      </div>
-    `;
+    if (state.done && state.completedAt) {
+      // --- 【完了済みタスクの表示】 ---
+      const actualDate = new Date(state.completedAt);
+      const scheduledEnd = new Date(currentStartTime.getTime() + task.duration * 60000);
+      const isDelayed = actualDate > scheduledEnd;
+      const delayMinutes = isDelayed ? Math.round((actualDate - scheduledEnd) / 60000) : 0;
 
-    listEl.appendChild(li);
+      const timeColorStyle = isDelayed ? 'color: #E74C3C;' : 'color: #2ECC71;';
+      const delayBadge = isDelayed ? ` <span style="color:#E74C3C; font-weight:bold;">[遅れ ${delayMinutes}分]</span>` : '';
+      const actualTimeString = `<div class="actual-time" style="${timeColorStyle} font-weight:bold;">完了: ${formatTime(actualDate)}${delayBadge}</div>`;
 
-    // 未完了タスクの配分計算
-    if (!state.done) {
-      // 残りの未完了タスクとそれらの合計設定時間
-      const remainingTasks = selectedTasks.slice(index + 1);
-      const remainingOriginalMinutes = remainingTasks.reduce((sum, t) => sum + t.duration, 0) + task.duration;
-      
-      // 目標出発時刻までの残り利用可能時間（ミリ秒 ➔ 分）
-      const availableMinutes = (depDate - currentStartTime) / 60000;
+      li.innerHTML = `
+        <input type="checkbox" class="task-checkbox" checked onchange="toggleTask(${task.id})">
+        <div class="task-info">
+          <div class="task-name">${escapeHtml(task.name)} (${task.duration}分)</div>
+          <div class="task-time">当初予定: ${formatTime(currentStartTime)} ～ ${formatTime(scheduledEnd)}</div>
+          ${actualTimeString}
+        </div>
+      `;
 
-      // もし時間が押していて、残りの合計予定時間が利用可能時間を超えている場合は【割合配分】
+      currentStartTime = scheduledEnd;
+
+    } else {
+      // --- 【未完了タスクの表示（再計算）】 ---
       let allocatedDuration = task.duration;
-      if (availableMinutes > 0 && remainingOriginalMinutes > 0 && availableMinutes < remainingOriginalMinutes) {
-        // 元の所要時間の割合に応じて、残された時間を圧縮配分
-        allocatedDuration = (task.duration / remainingOriginalMinutes) * availableMinutes;
+
+      // 残り時間が押している（かつ未完了タスクが存在する）場合は時間比率で割り振る
+      if (availableMinutes > 0 && remainingTotalOriginalMinutes > 0 && availableMinutes < remainingTotalOriginalMinutes) {
+        allocatedDuration = (task.duration / remainingTotalOriginalMinutes) * availableMinutes;
       } else if (availableMinutes <= 0) {
-        allocatedDuration = 1; // 限界を超えている場合は1分扱いにする
+        allocatedDuration = 1; // 時間切れの場合は最小1分表記
       }
 
-      // 圧縮された配分時間をもとに次のタスクの開始時刻を更新
-      currentStartTime = new Date(currentStartTime.getTime() + allocatedDuration * 60000);
+      const scheduledEnd = new Date(runningUncompletedStart.getTime() + allocatedDuration * 60000);
+
+      li.innerHTML = `
+        <input type="checkbox" class="task-checkbox" onchange="toggleTask(${task.id})">
+        <div class="task-info">
+          <div class="task-name">${escapeHtml(task.name)} (${task.duration}分)</div>
+          <div class="task-time">予定: ${formatTime(runningUncompletedStart)} ～ ${formatTime(scheduledEnd)}</div>
+        </div>
+      `;
+
+      // 次の未完了タスクのための開始時間を進める
+      runningUncompletedStart = scheduledEnd;
+      currentStartTime = new Date(currentStartTime.getTime() + task.duration * 60000);
     }
+
+    listEl.appendChild(li);
   });
 }
 
