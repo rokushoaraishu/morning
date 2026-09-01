@@ -11,20 +11,43 @@ const defaultMasterTasks = [
 
 let masterTasks = JSON.parse(localStorage.getItem('morning_master_tasks')) || defaultMasterTasks;
 let taskStates = JSON.parse(localStorage.getItem('morning_states')) || {};
+let startTime = localStorage.getItem('morning_start_time') || null;
 
 document.addEventListener('DOMContentLoaded', () => {
   renderTaskInputs();
   calculateSchedule();
 
-  // 1分ごとに画面を更新して、未完了タスクの遅延（赤字化）をリアルタイム判定
+  // 1分ごとに画面を更新して遅延をリアルタイム判定
   setInterval(calculateSchedule, 60000);
 
+  // タスク追加
   document.getElementById('add-task-btn').addEventListener('click', () => {
     saveTaskInputs();
     masterTasks.push({ id: Date.now(), name: '', duration: 10, selected: true });
     renderTaskInputs();
   });
 
+  // 全削除ボタン
+  document.getElementById('clear-all-btn').addEventListener('click', () => {
+    if (confirm('すべてのタスクを削除しますか？')) {
+      masterTasks = [];
+      localStorage.setItem('morning_master_tasks', JSON.stringify(masterTasks));
+      renderTaskInputs();
+      calculateSchedule();
+    }
+  });
+
+  // デフォルトに戻すボタン
+  document.getElementById('reset-default-btn').addEventListener('click', () => {
+    if (confirm('タスクリストを初期状態に戻しますか？')) {
+      masterTasks = JSON.parse(JSON.stringify(defaultMasterTasks));
+      localStorage.setItem('morning_master_tasks', JSON.stringify(masterTasks));
+      renderTaskInputs();
+      calculateSchedule();
+    }
+  });
+
+  // 今日のスケジュール作成ボタン
   document.getElementById('calculate-btn').addEventListener('click', () => {
     saveTaskInputs();
     calculateSchedule();
@@ -32,12 +55,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('departure-time').addEventListener('change', calculateSchedule);
   
+  // 進捗リセットボタン
   document.getElementById('reset-btn').addEventListener('click', () => {
     taskStates = {};
+    startTime = null;
     localStorage.removeItem('morning_states');
+    localStorage.removeItem('morning_start_time');
     calculateSchedule();
   });
 });
+
+// 準備スタートボタンを押した時
+function startMorning() {
+  startTime = new Date().toISOString();
+  localStorage.setItem('morning_start_time', startTime);
+  calculateSchedule();
+}
 
 function moveUp(index) {
   if (index <= 0) return;
@@ -114,7 +147,7 @@ function calculateSchedule() {
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
-  // 初期予定の算出（基準値）
+  // 初期予定の計算
   let totalMinutes = selectedTasks.reduce((sum, t) => sum + t.duration, 0);
   let initialStartDate = new Date(depDate.getTime() - totalMinutes * 60000);
   
@@ -123,12 +156,21 @@ function calculateSchedule() {
   const listEl = document.getElementById('task-list');
   listEl.innerHTML = '';
 
-  let currentStartTime = new Date(initialStartDate.getTime());
+  // スタートボタン枠の表示設定
+  const startBoxHtml = `
+    <div style="margin-bottom: 15px; text-align: center;">
+      ${startTime ? 
+        `<div style="font-size:0.9rem; color:#2ECC71; font-weight:bold;">🚀 準備スタート完了 (${formatTime(new Date(startTime))})</div>` : 
+        `<button onclick="startMorning()" class="btn btn-primary" style="background:#2ECC71;">🚀 今から準備スタート！</button>`
+      }
+    </div>
+  `;
+
+  let currentStartTime = startTime ? new Date(startTime) : new Date(initialStartDate.getTime());
+  let lastActionTime = new Date(currentStartTime.getTime()); // 直前の完了（またはスタート）時刻
 
   selectedTasks.forEach((task) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
-    
-    // このタスクの目標完了時刻
     let targetEndTime = new Date(currentStartTime.getTime() + task.duration * 60000);
     
     const li = document.createElement('li');
@@ -137,22 +179,28 @@ function calculateSchedule() {
     let timeDisplayHtml = '';
     
     if (state.done && state.completedAt) {
-      // --- 【完了済みタスクの表示処理】 ---
+      // --- 【完了済みタスクの処理】 ---
       const actualDate = new Date(state.completedAt);
-      // 当初の目標より遅れて完了した場合は赤文字
+      
+      // かかった時間（所要時間）の計算
+      const diffMs = actualDate.getTime() - lastActionTime.getTime();
+      const actualDuration = Math.max(0, Math.round(diffMs / 60000)); // 分単位
+      
       const isDelayed = actualDate > targetEndTime;
       const colorStyle = isDelayed ? 'color: #E74C3C; font-weight: bold;' : 'color: #2ECC71; font-weight: bold;';
       
       timeDisplayHtml = `
         <div class="task-time">完了目標: ${formatTime(targetEndTime)} まで</div>
-        <div style="${colorStyle} font-size: 0.85rem;">(完了記録: ${formatTime(actualDate)}${isDelayed ? ' ⚠️遅延' : ''})</div>
+        <div style="${colorStyle} font-size: 0.85rem;">
+          完了: ${formatTime(actualDate)} <span style="background:#EAEAEA; padding:2px 6px; border-radius:4px; margin-left:4px;">[所要時間: ${actualDuration}分]</span> ${isDelayed ? '⚠️遅延' : ''}
+        </div>
       `;
       
-      // 次のタスクへの引き継ぎ時刻を「実際の完了時刻」に更新
+      // 次の計算の基準時間を更新
+      lastActionTime = actualDate;
       currentStartTime = actualDate;
     } else {
-      // --- 【未完了タスクの表示処理】 ---
-      // 現在時刻がすでに目標時間を過ぎている場合は赤文字で警告！
+      // --- 【未完了タスクの処理】 ---
       const isOverdue = now > targetEndTime;
       const timeStyle = isOverdue ? 'color: #E74C3C; font-weight: bold;' : 'color: #666;';
       
@@ -162,23 +210,24 @@ function calculateSchedule() {
         </div>
       `;
       
-      // 未完了タスクの目標終了時間を次のタスクの開始基準にする
       currentStartTime = targetEndTime;
     }
 
     li.innerHTML = `
       <input type="checkbox" class="task-checkbox" ${state.done ? 'checked' : ''} onchange="toggleTask(${task.id})">
       <div class="task-info">
-        <div class="task-name">${task.name} (${task.duration}分)</div>
+        <div class="task-name">${task.name} (${task.duration}分設定)</div>
         ${timeDisplayHtml}
       </div>
     `;
 
     listEl.appendChild(li);
   });
+
+  // リストの先頭にスタートボタンを挿入
+  listEl.insertAdjacentHTML('afterbegin', startBoxHtml);
 }
 
-// チェックボックスを押した時の連動処理
 function toggleTask(taskId) {
   const selectedTasks = masterTasks.filter(t => t.selected && t.name !== '');
   const targetIndex = selectedTasks.findIndex(t => t.id === taskId);
@@ -188,7 +237,12 @@ function toggleTask(taskId) {
     const isCurrentlyDone = taskStates[taskId]?.done;
 
     if (!isCurrentlyDone) {
-      // チェックを入れた場合：選択したタスク「およびそれより上の未完了タスク」を全て完了扱いにする
+      // 準備スタートボタンを押していない状態でチェックを入れた場合、現在時刻で自動スタート扱いにする
+      if (!startTime) {
+        startTime = nowIso;
+        localStorage.setItem('morning_start_time', startTime);
+      }
+
       for (let i = 0; i <= targetIndex; i++) {
         const id = selectedTasks[i].id;
         if (!taskStates[id] || !taskStates[id].done) {
@@ -196,7 +250,6 @@ function toggleTask(taskId) {
         }
       }
     } else {
-      // チェックを外した場合：対象のタスクの完了状態を解除
       taskStates[taskId] = { done: false, completedAt: null };
     }
   }
