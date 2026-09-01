@@ -1,11 +1,12 @@
 // デフォルトのマスタータスク
 const defaultMasterTasks = [
-  { id: 1, name: '洗顔・歯磨き', duration: 10, selected: true },
-  { id: 2, name: '朝食', duration: 20, selected: true },
-  { id: 3, name: '着替え・身支度', duration: 15, selected: true },
-  { id: 4, name: 'メイク / ひげそり', duration: 15, selected: false },
-  { id: 5, name: 'ゴミ出し', duration: 5, selected: false },
-  { id: 6, name: '持ち物チェック', duration: 5, selected: true }
+  { id: 3, name: '洗顔・歯磨き', duration: 10, selected: true },
+  { id: 1, name: '朝食', duration: 30, selected: true },
+  { id: 6, name: '着替え・身支度', duration: 10, selected: true },
+  { id: 5, name: '化粧', duration: 25, selected: false },
+  { id: 2, name: 'お弁当', duration: 60, selected: false },
+  { id: 4, name: 'シャワー', duration: 20, selected: true },
+  { id: 7, name: '洗濯', duration: 8, selected: true }
 ];
 
 let masterTasks = JSON.parse(localStorage.getItem('morning_master_tasks')) || defaultMasterTasks;
@@ -15,14 +16,12 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTaskInputs();
   calculateSchedule();
 
-  // タスク追加ボタン：【修正】追加する前に入力内容を一時保存する
   document.getElementById('add-task-btn').addEventListener('click', () => {
-    saveTaskInputs(); // 今画面に入力されている内容を保存
+    saveTaskInputs();
     masterTasks.push({ id: Date.now(), name: '', duration: 10, selected: true });
-    renderTaskInputs(); // その後に再描画
+    renderTaskInputs();
   });
 
-  // スケジュール更新ボタン
   document.getElementById('calculate-btn').addEventListener('click', () => {
     saveTaskInputs();
     calculateSchedule();
@@ -30,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('departure-time').addEventListener('change', calculateSchedule);
   
-  // 進捗リセット
   document.getElementById('reset-btn').addEventListener('click', () => {
     taskStates = {};
     localStorage.removeItem('morning_states');
@@ -38,7 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-// 設定セクションの描画（入力内容が消えないようイベントリスナーも追加）
 function renderTaskInputs() {
   const container = document.getElementById('task-inputs');
   container.innerHTML = '';
@@ -55,7 +52,6 @@ function renderTaskInputs() {
     container.appendChild(row);
   });
 
-  // 文字を入力したりチェックを変えた瞬間にリアルタイムでデータを保持する処理
   const inputs = container.querySelectorAll('input');
   inputs.forEach(input => {
     input.addEventListener('input', saveTaskInputs);
@@ -64,13 +60,12 @@ function renderTaskInputs() {
 }
 
 function removeTask(index) {
-  saveTaskInputs(); // 削除する前にも現在の入力を保持
+  saveTaskInputs();
   masterTasks.splice(index, 1);
   renderTaskInputs();
   calculateSchedule();
 }
 
-// 画面に入力されている内容をデータ（masterTasks）に保存する処理
 function saveTaskInputs() {
   const selects = document.querySelectorAll('.input-select');
   const names = document.querySelectorAll('.input-name');
@@ -84,14 +79,12 @@ function saveTaskInputs() {
     }
   });
 
-  // ブラウザの文字記憶領域に保存
   localStorage.setItem('morning_master_tasks', JSON.stringify(masterTasks));
 }
 
-// 時間計算＆実行用リストの描画
+// 時間計算＆自動傾斜配分ロジック
 function calculateSchedule() {
   const depTimeStr = document.getElementById('departure-time').value;
-  // 今日選択されているタスク（かつ名前が空でないもの）だけを抽出
   const selectedTasks = masterTasks.filter(t => t.selected && t.name.trim() !== '');
 
   if (!depTimeStr || selectedTasks.length === 0) {
@@ -104,47 +97,78 @@ function calculateSchedule() {
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
-  // 1. 選択タスクの合計所要時間から、最初の開始時刻を計算
+  // 初期の理想開始時刻を計算
   let totalMinutes = selectedTasks.reduce((sum, t) => sum + t.duration, 0);
   let initialStartDate = new Date(depDate.getTime() - totalMinutes * 60000);
   
   document.getElementById('calc-start-time').textContent = formatTime(initialStartDate);
 
-  // 2. スケジュール描画 & 完了実績によるリアルタイム再計算
   const listEl = document.getElementById('task-list');
   listEl.innerHTML = '';
 
   let currentStartTime = new Date(initialStartDate.getTime());
 
-  selectedTasks.forEach((task) => {
+  selectedTasks.forEach((task, index) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
+    
+    // 当初の予定終了時刻
     let scheduledEnd = new Date(currentStartTime.getTime() + task.duration * 60000);
+    let isDelayed = false;
+    let delayMinutes = 0;
+    let actualTimeString = '';
+
+    if (state.done && state.completedAt) {
+      const actualDate = new Date(state.completedAt);
+      
+      // 遅延判定（完了時刻が予定終了時刻を超えているか）
+      if (actualDate > scheduledEnd) {
+        isDelayed = true;
+        delayMinutes = Math.round((actualDate - scheduledEnd) / 60000);
+      }
+
+      const timeColorStyle = isDelayed ? 'color: #E74C3C;' : 'color: #2ECC71;';
+      const delayBadge = isDelayed ? ` <span style="color:#E74C3C; font-weight:bold;">[遅れ ${delayMinutes}分]</span>` : '';
+      
+      actualTimeString = `<div class="actual-time" style="${timeColorStyle} font-weight:bold;">完了: ${formatTime(actualDate)}${delayBadge}</div>`;
+
+      // 次のタスクのための基準時間を完了実効時刻にする
+      currentStartTime = actualDate;
+    }
 
     const li = document.createElement('li');
     li.className = `task-item ${state.done ? 'completed' : ''}`;
-
-    let actualTimeString = '';
-    if (state.done && state.completedAt) {
-      const actualDate = new Date(state.completedAt);
-      actualTimeString = `(完了: ${formatTime(actualDate)})`;
-      // 実績時刻を次のタスクの開始基準時間にする（再計算）
-      currentStartTime = actualDate;
-      scheduledEnd = new Date(currentStartTime.getTime() + task.duration * 60000);
-    }
 
     li.innerHTML = `
       <input type="checkbox" class="task-checkbox" ${state.done ? 'checked' : ''} onchange="toggleTask(${task.id})">
       <div class="task-info">
         <div class="task-name">${escapeHtml(task.name)} (${task.duration}分)</div>
         <div class="task-time">予定: ${formatTime(currentStartTime)} ～ ${formatTime(scheduledEnd)}</div>
-        ${actualTimeString ? `<div class="actual-time">${actualTimeString}</div>` : ''}
+        ${actualTimeString}
       </div>
     `;
 
     listEl.appendChild(li);
 
+    // 未完了タスクの配分計算
     if (!state.done) {
-      currentStartTime = scheduledEnd;
+      // 残りの未完了タスクとそれらの合計設定時間
+      const remainingTasks = selectedTasks.slice(index + 1);
+      const remainingOriginalMinutes = remainingTasks.reduce((sum, t) => sum + t.duration, 0) + task.duration;
+      
+      // 目標出発時刻までの残り利用可能時間（ミリ秒 ➔ 分）
+      const availableMinutes = (depDate - currentStartTime) / 60000;
+
+      // もし時間が押していて、残りの合計予定時間が利用可能時間を超えている場合は【割合配分】
+      let allocatedDuration = task.duration;
+      if (availableMinutes > 0 && remainingOriginalMinutes > 0 && availableMinutes < remainingOriginalMinutes) {
+        // 元の所要時間の割合に応じて、残された時間を圧縮配分
+        allocatedDuration = (task.duration / remainingOriginalMinutes) * availableMinutes;
+      } else if (availableMinutes <= 0) {
+        allocatedDuration = 1; // 限界を超えている場合は1分扱いにする
+      }
+
+      // 圧縮された配分時間をもとに次のタスクの開始時刻を更新
+      currentStartTime = new Date(currentStartTime.getTime() + allocatedDuration * 60000);
     }
   });
 }
@@ -167,7 +191,6 @@ function formatTime(date) {
   return `${h}:${m}`;
 }
 
-// 特殊文字対策（入力されたテキストの安全な表示用）
 function escapeHtml(str) {
   if (!str) return '';
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
