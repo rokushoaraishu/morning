@@ -213,20 +213,23 @@ function calculateSchedule() {
     prevTime = compTime;
   });
 
-  // 最新の作業基準ポイント（最後に完了した時間、またはスタート時刻）
-  let currentPointTime = completedList.length > 0 
+  // 未完了タスクの短縮計算用ベース情報
+  const uncompletedStartPoint = completedList.length > 0 
     ? new Date(taskStates[completedList[completedList.length - 1].id].completedAt)
     : new Date(basePointTime.getTime());
 
-  // 未完了タスクの残り設定時間の合計
   const uncompletedTasks = selectedTasks.filter(t => !taskStates[t.id]?.done);
-  const remainingOrigTotal = uncompletedTasks.reduce((sum, t) => sum + t.duration, 0);
+  const uncompletedOrigTotalMin = uncompletedTasks.reduce((sum, t) => sum + t.duration, 0);
 
-  // 出発時刻までの残り時間（ミリ秒）
-  const remainingTimeMs = depDate.getTime() - currentPointTime.getTime();
+  // 未完了タスク全体に割り当て可能な残り時間（ミリ秒）
+  const availableRemainingMs = depDate.getTime() - uncompletedStartPoint.getTime();
 
-  // スケジュール描画用の現在計算基準時刻
+  // 未完了タスク一括で「短縮が必要か」を判定
+  const needsCompression = uncompletedOrigTotalMin > 0 && availableRemainingMs < uncompletedOrigTotalMin * 60000;
+
+  // スケジュール描画用の時刻ポインタ
   let schedPointer = new Date(basePointTime.getTime());
+  let currentUncompletedPoint = new Date(uncompletedStartPoint.getTime());
 
   selectedTasks.forEach((task) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
@@ -240,7 +243,6 @@ function calculateSchedule() {
       const actualDate = new Date(state.completedAt);
       const actualDuration = actualDurations[task.id] ?? 0;
       
-      // 当初目標時間の計算（設定時間どおりに進んだ場合）
       let targetEndTime = new Date(schedPointer.getTime() + task.duration * 60000);
       const isDelayed = actualDate > targetEndTime;
       const colorStyle = isDelayed ? 'color: #E74C3C; font-weight: bold;' : 'color: #2ECC71; font-weight: bold;';
@@ -254,21 +256,23 @@ function calculateSchedule() {
 
       schedPointer = actualDate;
     } else {
-      // --- 【未完了タスクの短縮再計算表示】 ---
+      // --- 【未完了タスクの表示】 ---
       let targetEndTime;
       let isCompressed = false;
 
-      if (remainingOrigTotal > 0 && remainingTimeMs < remainingOrigTotal * 60000) {
-        if (remainingTimeMs > 0) {
-          // 残り時間が出発時刻に収まるように比率短縮
-          const compressedDurationMs = (task.duration / remainingOrigTotal) * remainingTimeMs;
-          targetEndTime = new Date(currentPointTime.getTime() + compressedDurationMs);
+      if (needsCompression) {
+        if (availableRemainingMs > 0) {
+          // 残り時間を各タスクの設定時間の比率で配分
+          const allocatedMs = (task.duration / uncompletedOrigTotalMin) * availableRemainingMs;
+          targetEndTime = new Date(currentUncompletedPoint.getTime() + allocatedMs);
           isCompressed = true;
         } else {
+          // すでに出発時刻を越えている場合は出発時刻に固定
           targetEndTime = new Date(depDate.getTime());
+          isCompressed = true;
         }
       } else {
-        targetEndTime = new Date(currentPointTime.getTime() + task.duration * 60000);
+        targetEndTime = new Date(currentUncompletedPoint.getTime() + task.duration * 60000);
       }
 
       const isOverdue = now > targetEndTime;
@@ -280,8 +284,8 @@ function calculateSchedule() {
         </div>
       `;
 
-      currentPointTime = targetEndTime;
-      schedPointer = targetEndTime;
+      currentUncompletedPoint = new Date(targetEndTime.getTime());
+      schedPointer = new Date(targetEndTime.getTime());
     }
 
     // チェックボックスとタスク名を同一行に配置
