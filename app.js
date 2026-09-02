@@ -17,14 +17,17 @@ document.addEventListener('DOMContentLoaded', () => {
   renderTaskInputs();
   calculateSchedule();
 
+  // 1分ごとに画面を更新（リアルタイム遅延判定・再計算）
   setInterval(calculateSchedule, 60000);
 
+  // タスク追加ボタン
   document.getElementById('add-task-btn').addEventListener('click', () => {
     saveTaskInputs();
     masterTasks.push({ id: Date.now(), name: '', duration: 10, selected: true });
     renderTaskInputs();
   });
 
+  // 一括削除ボタン
   document.getElementById('clear-all-btn').addEventListener('click', () => {
     if (confirm('すべてのタスクを削除しますか？')) {
       masterTasks = [];
@@ -34,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  // デフォルトに戻すボタン
   document.getElementById('reset-default-btn').addEventListener('click', () => {
     if (confirm('タスクリストを初期状態に戻しますか？')) {
       masterTasks = JSON.parse(JSON.stringify(defaultMasterTasks));
@@ -43,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 「今日のスケジュール作成」ボタン：記録は保持したまま、設定内容に合わせて再計算
+  // 「今日のスケジュール作成」ボタン
   document.getElementById('calculate-btn').addEventListener('click', () => {
     saveTaskInputs();
     calculateSchedule();
@@ -51,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('departure-time').addEventListener('change', calculateSchedule);
   
-  // 「進捗をリセット」ボタン：ここでだけ完了記録やスタート時刻を完全にクリア
+  // 進捗リセットボタン
   document.getElementById('reset-btn').addEventListener('click', () => {
     if (confirm('今日の進捗と記録をリセットしますか？')) {
       resetProgress();
@@ -74,8 +78,9 @@ function startMorning() {
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
+  // 準備スタート時点で出発時刻を過ぎている場合
   if (now >= depDate) {
-    alert('⚠️ 目標出発時刻を過ぎています！\n上部の「1. 今日の準備設定」で新しい目標出発時刻を再設定してください。');
+    alert('⚠️ 目標出発時刻を過ぎています！\n設定欄で新しい目標出発時刻を再設定してください。');
     return;
   }
 
@@ -162,7 +167,7 @@ function calculateSchedule() {
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
-  // 初期予定の計算（準備開始予定時刻）
+  // 初期必要時間の計算（設定通りの合計分）
   let totalMinutes = selectedTasks.reduce((sum, t) => sum + t.duration, 0);
   let initialStartDate = new Date(depDate.getTime() - totalMinutes * 60000);
   
@@ -171,12 +176,12 @@ function calculateSchedule() {
   const listEl = document.getElementById('task-list');
   listEl.innerHTML = '';
 
-  // 出発時刻超過の判定メッセージ
+  // 現在時刻が出発時刻を超過している場合のアラート
   let alertHtml = '';
   if (now >= depDate) {
     alertHtml = `
       <div style="background: #FDEDEC; border: 1px solid #E74C3C; color: #C0392B; padding: 10px; border-radius: 6px; margin-bottom: 12px; font-size: 0.85rem; text-align: center; font-weight: bold;">
-        ⚠️ 目標出発時刻 (${depTimeStr}) を過ぎています。<br>設定欄で新しい目標出発時刻を再設定してください。
+        ⚠️ 目標出発時刻 (${depTimeStr}) を過ぎています！<br>設定欄で新しい目標出発時刻を再設定してください。
       </div>
     `;
   }
@@ -190,24 +195,72 @@ function calculateSchedule() {
     </div>
   `;
 
-  let currentPointTime = startTime ? new Date(startTime) : new Date(initialStartDate.getTime());
-  let lastActionTime = new Date(currentPointTime.getTime());
+  // 1. 完了済みタスクの完了順（completedAt順）を取得し、所要時間を動的算出
+  const completedList = selectedTasks
+    .filter(t => taskStates[t.id]?.done && taskStates[t.id]?.completedAt)
+    .sort((a, b) => new Date(taskStates[a.id].completedAt) - new Date(taskStates[b.id].completedAt));
 
-  selectedTasks.forEach((task, index) => {
+  let basePointTime = startTime ? new Date(startTime) : new Date(initialStartDate.getTime());
+  
+  // 完了済みタスクごとの実績所要時間マッピング
+  const actualDurations = {};
+  let prevTime = new Date(basePointTime.getTime());
+
+  completedList.forEach((task) => {
+    const compTime = new Date(taskStates[task.id].completedAt);
+    const diffMs = compTime.getTime() - prevTime.getTime();
+    actualDurations[task.id] = Math.max(0, Math.round(diffMs / 60000));
+    prevTime = compTime;
+  });
+
+  // 最新の作業基準ポイント（最後に完了した時間、またはスタート時刻）
+  let currentPointTime = completedList.length > 0 
+    ? new Date(taskStates[completedList[completedList.length - 1].id].completedAt)
+    : new Date(basePointTime.getTime());
+
+  // 未完了タスクの残り設定時間の合計
+  const uncompletedTasks = selectedTasks.filter(t => !taskStates[t.id]?.done);
+  const remainingOrigTotal = uncompletedTasks.reduce((sum, t) => sum + t.duration, 0);
+
+  // 出発時刻までの残り時間（ミリ秒）
+  const remainingTimeMs = depDate.getTime() - currentPointTime.getTime();
+
+  // スケジュール描画用の現在計算基準時刻
+  let schedPointer = new Date(basePointTime.getTime());
+
+  selectedTasks.forEach((task) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
-    
-    // 未完了タスクのみの残り時間＆再計算ロジック
-    const remainingTasks = selectedTasks.slice(index).filter(t => !taskStates[t.id]?.done);
-    const remainingOrigTotal = remainingTasks.reduce((sum, t) => sum + t.duration, 0);
-    const remainingTimeMs = depDate.getTime() - currentPointTime.getTime();
+    const li = document.createElement('li');
+    li.className = `task-item ${state.done ? 'completed' : ''}`;
 
-    let targetEndTime;
-    let isCompressed = false;
+    let timeDisplayHtml = '';
 
-    if (!state.done) {
+    if (state.done && state.completedAt) {
+      // --- 【完了済みタスクの表示】 ---
+      const actualDate = new Date(state.completedAt);
+      const actualDuration = actualDurations[task.id] ?? 0;
+      
+      // 当初目標時間の計算（設定時間どおりに進んだ場合）
+      let targetEndTime = new Date(schedPointer.getTime() + task.duration * 60000);
+      const isDelayed = actualDate > targetEndTime;
+      const colorStyle = isDelayed ? 'color: #E74C3C; font-weight: bold;' : 'color: #2ECC71; font-weight: bold;';
+
+      timeDisplayHtml = `
+        <div class="task-time">目標: ${formatTime(targetEndTime)} まで</div>
+        <div style="${colorStyle} font-size: 0.85rem; margin-top: 2px;">
+          完了: ${formatTime(actualDate)} <span style="background:#EAEAEA; padding:2px 6px; border-radius:4px; margin-left:4px;">[所要時間: ${actualDuration}分]</span> ${isDelayed ? '⚠️遅延' : ''}
+        </div>
+      `;
+
+      schedPointer = actualDate;
+    } else {
+      // --- 【未完了タスクの短縮再計算表示】 ---
+      let targetEndTime;
+      let isCompressed = false;
+
       if (remainingOrigTotal > 0 && remainingTimeMs < remainingOrigTotal * 60000) {
         if (remainingTimeMs > 0) {
-          // 残り時間に合わせて比率圧縮
+          // 残り時間が出発時刻に収まるように比率短縮
           const compressedDurationMs = (task.duration / remainingOrigTotal) * remainingTimeMs;
           targetEndTime = new Date(currentPointTime.getTime() + compressedDurationMs);
           isCompressed = true;
@@ -217,47 +270,21 @@ function calculateSchedule() {
       } else {
         targetEndTime = new Date(currentPointTime.getTime() + task.duration * 60000);
       }
-    } else {
-      // 完了タスクの目標時間は設定時間基準で計算
-      targetEndTime = new Date(currentPointTime.getTime() + task.duration * 60000);
-    }
 
-    const li = document.createElement('li');
-    li.className = `task-item ${state.done ? 'completed' : ''}`;
-
-    let timeDisplayHtml = '';
-    
-    if (state.done && state.completedAt) {
-      const actualDate = new Date(state.completedAt);
-      const diffMs = actualDate.getTime() - lastActionTime.getTime();
-      const actualDuration = Math.max(0, Math.round(diffMs / 60000));
-      
-      const isDelayed = actualDate > targetEndTime;
-      const colorStyle = isDelayed ? 'color: #E74C3C; font-weight: bold;' : 'color: #2ECC71; font-weight: bold;';
-      
-      timeDisplayHtml = `
-        <div class="task-time">目標: ${formatTime(targetEndTime)} まで</div>
-        <div style="${colorStyle} font-size: 0.85rem; margin-top: 2px;">
-          完了: ${formatTime(actualDate)} <span style="background:#EAEAEA; padding:2px 6px; border-radius:4px; margin-left:4px;">[所要時間: ${actualDuration}分]</span> ${isDelayed ? '⚠️遅延' : ''}
-        </div>
-      `;
-      
-      lastActionTime = actualDate;
-      currentPointTime = actualDate;
-    } else {
       const isOverdue = now > targetEndTime;
       const timeStyle = isOverdue ? 'color: #E74C3C; font-weight: bold;' : (isCompressed ? 'color: #E67E22; font-weight: bold;' : 'color: #666;');
-      
+
       timeDisplayHtml = `
         <div class="task-time" style="${timeStyle} margin-top: 2px;">
           目標: <strong>${formatTime(targetEndTime)}</strong> まで ${isCompressed ? '⚡(短縮計算)' : ''} ${isOverdue ? '⚠️遅延中' : ''}
         </div>
       `;
-      
+
       currentPointTime = targetEndTime;
+      schedPointer = targetEndTime;
     }
 
-    // チェックボックスとタスク名を横並び（<label>で囲むことでタスク名タップでもチェック可能）
+    // チェックボックスとタスク名を同一行に配置
     li.innerHTML = `
       <div class="task-info" style="width: 100%;">
         <label style="display: flex; align-items: center; cursor: pointer; font-weight: bold; font-size: 1rem;">
@@ -276,7 +303,7 @@ function calculateSchedule() {
   listEl.insertAdjacentHTML('afterbegin', startBoxHtml + alertHtml);
 }
 
-// 選択した単一タスクのみトグル切り替え
+// 押した単一タスクのみトグル切り替え（順不同対応）
 function toggleTask(taskId) {
   const nowIso = new Date().toISOString();
 
