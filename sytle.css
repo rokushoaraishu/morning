@@ -88,7 +88,7 @@ input[type="time"], input[type="text"], input[type="number"] {
 .btn-del { background: #FF4D4D; color: white; border: none; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
 
 .highlight-box {
-  background: #EBF5FB;
+  background: #a4e37f;
   padding: 12px;
   border-radius: 8px;
   text-align: center;
