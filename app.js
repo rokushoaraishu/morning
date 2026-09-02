@@ -174,8 +174,8 @@ function calculateSchedule() {
   const startBoxHtml = `
     <div style="margin-bottom: 15px; text-align: center;">
       ${startTime ? 
-        `<div style="font-size:0.9rem; color:#2ECC71; font-weight:bold;">🚀 準備スタート完了 (${formatTime(new Date(startTime))})</div>` : 
-        `<button onclick="startMorning()" class="btn btn-primary" style="background:#2ECC71;">🚀 今から準備スタート！</button>`
+        `<div style="font-size:0.9rem; color:#2ECC71; font-weight:bold;">準備スタート完了 (${formatTime(new Date(startTime))})</div>` : 
+        `<button onclick="startMorning()" class="btn btn-primary" style="background:#2ECC71;">今から準備スタート！</button>`
       }
     </div>
   `;
