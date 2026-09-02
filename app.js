@@ -3,7 +3,7 @@ const defaultMasterTasks = [
   { id: 2, name: 'お弁当', duration: 60, selected: true },
   { id: 3, name: '歯磨き', duration: 15, selected: true },
   { id: 4, name: 'シャワー', duration: 20, selected:  true },
- { id: 5, name: '化粧', duration: 25, selected: true },
+  { id: 5, name: '化粧', duration: 25, selected: true },
   { id: 6, name: 'ヘアセット', duration: 5, selected: true },
   { id: 7, name: '着替え', duration: 7, selected: true },
   { id: 8, name: '洗濯', duration: 8, selected: true }
@@ -43,18 +43,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // 「今日のスケジュール作成」ボタン：実行リストの進捗状態も完全にリセットして再作成
+  // 「今日のスケジュール作成」ボタン：記録は保持したまま、設定内容に合わせて再計算
   document.getElementById('calculate-btn').addEventListener('click', () => {
     saveTaskInputs();
-    resetProgress();
     calculateSchedule();
   });
 
   document.getElementById('departure-time').addEventListener('change', calculateSchedule);
   
+  // 「進捗をリセット」ボタン：ここでだけ完了記録やスタート時刻を完全にクリア
   document.getElementById('reset-btn').addEventListener('click', () => {
-    resetProgress();
-    calculateSchedule();
+    if (confirm('今日の進捗と記録をリセットしますか？')) {
+      resetProgress();
+      calculateSchedule();
+    }
   });
 });
 
@@ -72,7 +74,6 @@ function startMorning() {
   const [depH, depM] = depTimeStr.split(':').map(Number);
   let depDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), depH, depM, 0);
 
-  // スタートを押した時点で出発時刻を過ぎている場合
   if (now >= depDate) {
     alert('⚠️ 目標出発時刻を過ぎています！\n設定欄で目標出発時刻を再設定してください。');
     return;
@@ -90,6 +91,7 @@ function moveUp(index) {
   masterTasks[index] = masterTasks[index - 1];
   masterTasks[index - 1] = temp;
   renderTaskInputs();
+  calculateSchedule(); // 順番変更時も記録を維持して再計算
 }
 
 function moveDown(index) {
@@ -99,6 +101,7 @@ function moveDown(index) {
   masterTasks[index] = masterTasks[index + 1];
   masterTasks[index + 1] = temp;
   renderTaskInputs();
+  calculateSchedule(); // 順番変更時も記録を維持して再計算
 }
 
 function renderTaskInputs() {
@@ -126,6 +129,7 @@ function removeTask(index) {
   saveTaskInputs();
   masterTasks.splice(index, 1);
   renderTaskInputs();
+  calculateSchedule();
 }
 
 function saveTaskInputs() {
@@ -182,29 +186,23 @@ function calculateSchedule() {
   selectedTasks.forEach((task, index) => {
     const state = taskStates[task.id] || { done: false, completedAt: null };
     
-    // --- 【圧縮計算ロジック】 ---
-    // これ以降に残っている未完了タスクの元の設定時間の合計を算出
+    // 圧縮計算（残りタスクの比率調整）
     const remainingTasks = selectedTasks.slice(index).filter(t => !taskStates[t.id]?.done);
     const remainingOrigTotal = remainingTasks.reduce((sum, t) => sum + t.duration, 0);
-
-    // 現在地点から出発時間までの残り時間（ミリ秒）
     const remainingTimeMs = depDate.getTime() - currentPointTime.getTime();
 
     let targetEndTime;
     let isCompressed = false;
 
     if (!state.done && remainingOrigTotal > 0 && remainingTimeMs < remainingOrigTotal * 60000) {
-      // 予定通りだと間に合わない場合：残り時間を出発時間に合わせて比率で縮小（圧縮）
       if (remainingTimeMs > 0) {
         const compressedDurationMs = (task.duration / remainingOrigTotal) * remainingTimeMs;
         targetEndTime = new Date(currentPointTime.getTime() + compressedDurationMs);
         isCompressed = true;
       } else {
-        // すでに出発時刻を超過している場合
         targetEndTime = new Date(depDate.getTime());
       }
     } else {
-      // 通常通りの所要時間計算
       targetEndTime = new Date(currentPointTime.getTime() + task.duration * 60000);
     }
 
